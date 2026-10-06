@@ -124,7 +124,15 @@ class EbichelchenClient:
         self._auth_failed = False
 
     async def _request(
-        self, method: str, url: str, *, data=None, params=None, follow=True, credentials=False
+        self,
+        method: str,
+        url: str,
+        *,
+        data=None,
+        params=None,
+        headers=None,
+        follow=True,
+        credentials=False,
     ) -> Page:
         """Validate every redirect, with finite timeouts and bounded response bodies."""
         try:
@@ -136,7 +144,7 @@ class EbichelchenClient:
                 ):
                     raise UnsupportedAuth("Unexpected credential destination")
                 async with self.session.request(
-                    method, url, data=data, params=params, allow_redirects=False
+                    method, url, data=data, params=params, headers=headers, allow_redirects=False
                 ) as response:
                     chunks = []
                     size = 0
@@ -165,6 +173,9 @@ class EbichelchenClient:
                         raise InvalidResponse("Redirect has no destination")
                     url = urljoin(page.url, location)
                     validate_url(url)
+                    # Request-specific headers (including Referer) belong only
+                    # to the original destination, not a later SAML redirect.
+                    headers = None
                     if page.status == 303 or (page.status in (301, 302) and method == "POST"):
                         method, data, credentials = "GET", None, False
                     continue
@@ -261,7 +272,17 @@ class EbichelchenClient:
                     "GET",
                     "https://auth.education.lu/module.php/IAM/idpSelection.php",
                     params={"username": self.username},
+                    # This endpoint returns 404 for ordinary requests. Match
+                    # the discovery page's jQuery getJSON request.
+                    headers={
+                        "Accept": "application/json, text/javascript, */*; q=0.01",
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Referer": page.url,
+                    },
+                    follow=False,
                 )
+                if discovery.status != 200:
+                    raise InvalidResponse(f"IAM discovery returned HTTP {discovery.status}")
                 try:
                     choice = json.loads(discovery.text.lstrip("\ufeff"))
                 except ValueError:

@@ -91,6 +91,12 @@ async def test_complete_login_flow(client):
     await client._login()
     assert client._authenticated
     calls = client._request.call_args_list
+    assert calls[1].kwargs["headers"] == {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": discovery.url,
+    }
+    assert calls[1].kwargs["follow"] is False
     assert calls[2].kwargs["params"]["return"] == "dynamic-state"
     assert "idp_urn:x-auth-education-lu:auth:iam" in calls[2].kwargs["params"]
     assert calls[3].args[1].endswith("?AuthState=fresh")
@@ -195,6 +201,52 @@ async def test_redirect_is_checked_before_request(client):
     with pytest.raises(UnsupportedAuth):
         await client._request("GET", FakeResponse.url)
     assert client.session.request.call_count == 1
+
+
+async def test_ajax_headers_reach_the_server(client):
+    def request(method, url, **kwargs):
+        response = FakeResponse()
+        response.url = url
+        response.status = (
+            200 if kwargs.get("headers", {}).get("X-Requested-With") == "XMLHttpRequest" else 404
+        )
+        response.headers = {}
+        return response
+
+    client.session.request.side_effect = request
+    url = "https://auth.education.lu/module.php/IAM/idpSelection.php"
+    assert (await client._request("GET", url, headers={}, follow=False)).status == 404
+    page = await client._request(
+        "GET", url, headers={"X-Requested-With": "XMLHttpRequest"}, follow=False
+    )
+    assert page.status == 200
+
+
+async def test_request_headers_are_not_forwarded_on_redirect(client):
+    redirect = FakeResponse()
+    redirect.headers = {"Location": "https://ssl.education.lu/ebichelchen/app/"}
+    destination = FakeResponse()
+    destination.url = redirect.headers["Location"]
+    destination.status = 200
+    destination.headers = {}
+    client.session.request.side_effect = [redirect, destination]
+    await client._request("GET", redirect.url, headers={"Referer": redirect.url + "?state=demo"})
+    assert client.session.request.call_args_list[1].kwargs["headers"] is None
+
+
+@pytest.mark.parametrize("status", [302, 404])
+async def test_discovery_http_errors_stop_before_password(client, status):
+    url = "https://auth.education.lu/module.php/saml/disco"
+    client._request = AsyncMock(
+        side_effect=[
+            Page(url, 200, '<form><input name="username"></form>'),
+            Page(url, status, '{"syntax":"OK","auth":"urn:x-auth-education-lu:auth:iam"}'),
+        ]
+    )
+    with pytest.raises(InvalidResponse, match=f"IAM discovery returned HTTP {status}"):
+        await client._login()
+    assert client._request.call_count == 2
+    assert not client._authenticated
 
 
 async def test_credentials_cannot_be_replayed_to_other_trusted_host(client):
