@@ -65,5 +65,5 @@ jobs:
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             echo "Release already exists; leaving it unchanged."
           else
-            gh release create "$RELEASE_TAG" --target "$RELEASE_TARGET" --title "eBichelchen $RELEASE_TAG" --notes-file RELEASE_NOTES.md
+            gh release create "$RELEASE_TAG" --target "$RELEASE_TARGET" --title "eBichelchen $RELEASE_TAG" --notes-file RELEASE_NOTES.md --latest
           fi
