@@ -58,3 +58,21 @@ async def test_reauth_updates_same_entry(monkeypatch):
     flow.async_update_reload_and_abort.assert_called_once_with(
         entry, data_updates={"password": "new-demo-password"}
     )
+
+
+async def test_setup_shows_and_logs_safe_error_detail(monkeypatch, caplog):
+    from custom_components.ebichelchen.api import InvalidResponse
+
+    flow = EbichelchenConfigFlow()
+    detail = "Unexpected API status: HTTP 400 at user_profile"
+    monkeypatch.setattr(
+        "custom_components.ebichelchen.config_flow.validate_credentials",
+        AsyncMock(side_effect=InvalidResponse(detail)),
+    )
+    result = await flow.async_step_user(
+        {"username": "private-user", "password": "private-password"}
+    )
+    assert result["description_placeholders"] == {"error_detail": detail}
+    assert detail in caplog.text
+    assert "private-user" not in caplog.text
+    assert "private-password" not in caplog.text

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
@@ -18,6 +20,8 @@ from .api import (
     UnsupportedRole,
 )
 from .const import CONF_REFRESH, CONF_STUDENTS, DEFAULT_REFRESH, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def credentials_schema(username: str = "", reauth: bool = False):
@@ -64,6 +68,7 @@ class EbichelchenConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         errors = {}
+        error_detail = ""
         if user_input is not None:
             username = user_input[CONF_USERNAME].strip()
             if not username or not user_input[CONF_PASSWORD]:
@@ -75,6 +80,8 @@ class EbichelchenConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 except EbichelchenError as err:
                     errors["base"] = error_key(err)
+                    error_detail = str(err)
+                    _LOGGER.warning("eBichelchen setup failed: %s", error_detail)
                 else:
                     await self.async_set_unique_id(account_id)
                     self._abort_if_unique_id_configured()
@@ -89,6 +96,7 @@ class EbichelchenConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=credentials_schema((user_input or {}).get(CONF_USERNAME, "")),
             errors=errors,
+            description_placeholders={"error_detail": error_detail},
         )
 
     async def async_step_students(self, user_input=None):
@@ -127,6 +135,7 @@ class EbichelchenConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(self, user_input=None):
         entry = self._get_reauth_entry()
         errors = {}
+        error_detail = ""
         if user_input is not None:
             try:
                 account_id, students = await validate_credentials(
@@ -134,6 +143,8 @@ class EbichelchenConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
             except EbichelchenError as err:
                 errors["base"] = error_key(err)
+                error_detail = str(err)
+                _LOGGER.warning("eBichelchen reauthentication failed: %s", error_detail)
             else:
                 await self.async_set_unique_id(account_id)
                 self._abort_if_unique_id_mismatch()
@@ -144,7 +155,10 @@ class EbichelchenConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         entry, data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]}
                     )
         return self.async_show_form(
-            step_id="reauth_confirm", data_schema=credentials_schema(reauth=True), errors=errors
+            step_id="reauth_confirm",
+            data_schema=credentials_schema(reauth=True),
+            errors=errors,
+            description_placeholders={"error_detail": error_detail},
         )
 
     @staticmethod

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from time import monotonic
@@ -13,6 +14,23 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from .const import ALLOWED_HOSTS, API_URL, SCHOOL_TZ
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def endpoint_label(url: str) -> str:
+    """Use fixed labels so redirect URLs cannot leak state into diagnostics."""
+    return {
+        "/ebichelchen/app/api/login": "login_start",
+        "/module.php/IAM/idpSelection.php": "iam_discovery",
+        "/module.php/core/loginuserpass": "iam_password",
+        "/module.php/saml/disco": "iam_selection",
+        "/module.php/saml/sp/saml2-acs.php/default": "saml_identity_handoff",
+        "/ebichelchen/app/saml/sso": "saml_application_handoff",
+        "/ebichelchen/app/api/v2/get-user": "user_profile",
+        "/ebichelchen/app/api/v2/fetch-students-for-parent": "student_list",
+        "/ebichelchen/app/api/v4/fetch-entries-for-week": "calendar_week",
+    }.get(urlsplit(url).path, "authentication_redirect")
 
 
 class EbichelchenError(Exception):
@@ -131,10 +149,16 @@ class EbichelchenClient:
                     page = Page(
                         str(response.url),
                         response.status,
-                        raw.decode("utf-8", errors="replace"),
+                        raw.decode("utf-8-sig", errors="replace"),
                         response.headers.get("Content-Type", ""),
                     )
                     location = response.headers.get("Location")
+                _LOGGER.debug(
+                    "eBichelchen step=%s method=%s status=%d",
+                    endpoint_label(page.url),
+                    method,
+                    page.status,
+                )
                 params = None
                 if follow and page.status in (301, 302, 303, 307, 308):
                     if not location:
@@ -158,15 +182,23 @@ class EbichelchenClient:
         if page.status == 403:
             raise AccessDenied("Account is not authorized for this resource")
         if page.status != 200:
-            raise InvalidResponse("Unexpected API status")
+            raise InvalidResponse(
+                f"Unexpected API status: HTTP {page.status} at {endpoint_label(page.url)}"
+            )
         if "text/html" in page.content_type.lower() or page.text.lstrip().startswith("<"):
             raise SessionExpired()
         try:
-            payload = json.loads(page.text)
+            payload = json.loads(page.text.lstrip("\ufeff"))
         except (ValueError, TypeError):
-            raise InvalidResponse("API did not return JSON") from None
+            raise InvalidResponse(
+                f"Expected JSON at {endpoint_label(page.url)} (HTTP {page.status})"
+            ) from None
         if not isinstance(payload, dict) or payload.get("code") != 0 or "objects" not in payload:
-            raise InvalidResponse("Unexpected API response envelope")
+            code = payload.get("code") if isinstance(payload, dict) else None
+            safe_code = str(code) if type(code) is int else "missing/non-numeric"
+            raise InvalidResponse(
+                f"Unexpected API envelope at {endpoint_label(page.url)} (HTTP {page.status}, code={safe_code})"
+            )
         return payload["objects"]
 
     async def _login(self) -> None:
@@ -231,9 +263,11 @@ class EbichelchenClient:
                     params={"username": self.username},
                 )
                 try:
-                    choice = json.loads(discovery.text)
+                    choice = json.loads(discovery.text.lstrip("\ufeff"))
                 except ValueError:
-                    raise InvalidResponse("Invalid IAM discovery response") from None
+                    raise InvalidResponse(
+                        f"IAM discovery did not return JSON (HTTP {discovery.status})"
+                    ) from None
                 if not isinstance(choice, dict) or choice.get("syntax") != "OK":
                     raise InvalidAuth("IAM username was not accepted")
                 if choice.get("auth") != "urn:x-auth-education-lu:auth:iam":

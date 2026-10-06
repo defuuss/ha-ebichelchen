@@ -2,7 +2,7 @@
 
 Unofficial, read-only Home Assistant custom integration for Luxembourg's eBichelchen. Designed for installation through HACS as a **custom repository**.
 
-**Initial version: not yet tested against a live IAM login or inside a running Home Assistant installation.** The protocol was reconstructed from a browser capture dated 6 October 2026. 36 automated tests pass against Home Assistant 2025.4.4 and Python 3.13. Tests use synthetic data; newer Home Assistant versions have not yet been run in this test environment. Education.lu does not publish a compatibility contract for these private endpoints; a login-page or API change can require an integration update.
+**Initial version: not yet tested against a live IAM login or inside a running Home Assistant installation.** The protocol was reconstructed from a browser capture dated 6 October 2026. 40 automated tests pass against Home Assistant 2025.4.4 and Python 3.13. Tests use synthetic data; newer Home Assistant versions have not yet been run in this test environment. Education.lu does not publish a compatibility contract for these private endpoints; a login-page or API change can require an integration update.
 
 ## What it does
 
@@ -108,3 +108,13 @@ Not affiliated with or endorsed by Education.lu, CGIE, Home Assistant, or HACS.
 ## License
 
 GNU General Public License v3.0; see [LICENSE](LICENSE).
+
+## Troubleshooting downloads and setup
+
+If HACS requests an archive under `refs/heads/<short-commit>.zip` and receives 404, refresh the repository information and use **Redownload** to select a named release, such as **v0.1.3**. If no release is listed yet, select **main**. Restart Home Assistant after a successful download. A failed download can leave an older integration installed.
+
+The Home Assistant warning that a custom integration has not been tested by Home Assistant is expected; it does not itself mean installation or authentication failed.
+
+Version 0.1.3 displays the integration's safe error reason in setup and logs it under `custom_components.ebichelchen.config_flow`. Share that line if setup fails. Optional debug logging for `custom_components.ebichelchen.api` records fixed login-step names and HTTP status codes only. No raw requests or responses are logged.
+
+GitHub Actions publishes a named release after the tests and hassfest pass on `main`, when the manifest version has not been released before. Existing releases are left unchanged.

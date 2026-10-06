@@ -224,3 +224,37 @@ async def test_mfa_discovery_rejected_before_password(client):
     assert all(
         "password" not in call.kwargs.get("data", {}) for call in client._request.call_args_list
     )
+
+
+def test_json_bom_is_accepted():
+    page = Page(
+        API_URL + "/v2/get-user", 200, '\ufeff{"code":0,"objects":{"id":123}}', "application/json"
+    )
+    assert EbichelchenClient._decode(page) == {"id": 123}
+
+
+def test_api_error_diagnostics_do_not_include_private_response_data():
+    page = Page(
+        API_URL + "/v2/get-user?secret=private-state",
+        400,
+        "private password and body",
+        "text/plain",
+    )
+    with pytest.raises(InvalidResponse) as error:
+        EbichelchenClient._decode(page)
+    assert str(error.value) == "Unexpected API status: HTTP 400 at user_profile"
+    assert "private" not in str(error.value)
+
+
+def test_api_envelope_diagnostics_do_not_echo_server_strings():
+    page = Page(
+        API_URL + "/v2/get-user",
+        200,
+        '{"code":"private-data","message":"secret","objects":null}',
+        "application/json",
+    )
+    with pytest.raises(InvalidResponse) as error:
+        EbichelchenClient._decode(page)
+    assert "user_profile" in str(error.value)
+    assert "private-data" not in str(error.value)
+    assert "secret" not in str(error.value)

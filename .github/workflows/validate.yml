@@ -30,3 +30,40 @@ jobs:
         with:
           category: integration
           ignore: brands
+  release:
+    # Only tested main-branch versions are published. Repository About metadata
+    # is checked separately by HACS and does not change the installable source.
+    needs: [tests, hassfest]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read release version
+        id: version
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          version = json.loads(Path('custom_components/ebichelchen/manifest.json').read_text())['version']
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
+              raise SystemExit('Expected a three-part numeric release version')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'tag=v{version}\n')
+          PY
+      - name: Publish version if it does not already exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TARGET: ${{ github.sha }}
+        run: |
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release already exists; leaving it unchanged."
+          else
+            gh release create "$RELEASE_TAG" --target "$RELEASE_TARGET" --title "eBichelchen $RELEASE_TAG" --notes-file RELEASE_NOTES.md
+          fi

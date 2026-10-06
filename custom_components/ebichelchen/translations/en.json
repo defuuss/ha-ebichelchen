@@ -32,7 +32,7 @@
       "cannot_connect": "Unable to reach Education.lu. Try again later.",
       "unsupported_role": "Use a student or parent account. Teacher and supervisor accounts are not supported.",
       "access_denied": "This account cannot access the selected student. Check access in eBichelchen.",
-      "invalid_response": "Education.lu returned an unexpected response. The integration may need updating.",
+      "invalid_response": "Education.lu returned an unexpected response. The integration may need updating. {error_detail}",
       "select_students": "Select at least one student."
     },
     "abort": {
