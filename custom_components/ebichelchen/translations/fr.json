@@ -1,0 +1,56 @@
+{
+  "title": "eBichelchen",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connexion à eBichelchen",
+        "description": "Utilisez un compte IAM élève ou parent. eduKey, LuxTrust et eID ne sont pas pris en charge. Les identifiants sont conservés dans la configuration locale de Home Assistant.",
+        "data": {
+          "username": "Identifiant IAM",
+          "password": "Mot de passe IAM"
+        }
+      },
+      "students": {
+        "title": "Choisir les calendriers",
+        "description": "Un calendrier eBichelchen est créé pour chaque élève sélectionné. Vous pouvez les afficher avec vos calendriers existants. Le renouvellement de session est indépendant de la fréquence de mise à jour.",
+        "data": {
+          "students": "Élèves",
+          "refresh_minutes": "Intervalle de mise à jour (minutes, 15–1440)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnecter eBichelchen",
+        "description": "Saisissez le mot de passe actuel du même compte IAM.",
+        "data": {
+          "password": "Mot de passe IAM"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Connexion IAM refusée. Vérifiez vos identifiants.",
+      "unsupported_auth": "Cette connexion nécessite une étape interactive non prise en charge (MFA, LuxTrust ou eID).",
+      "cannot_connect": "Connexion à Education.lu impossible. Réessayez plus tard.",
+      "unsupported_role": "Utilisez un compte élève ou parent. Les comptes enseignant et encadrant ne sont pas pris en charge.",
+      "access_denied": "Ce compte ne peut pas accéder à cet élève. Vérifiez les droits dans eBichelchen.",
+      "invalid_response": "Réponse inattendue de Education.lu. Une mise à jour peut être nécessaire.",
+      "select_students": "Sélectionnez au moins un élève."
+    },
+    "abort": {
+      "already_configured": "Ce compte est déjà configuré.",
+      "no_students": "Aucun élève accessible pour ce compte.",
+      "reauth_successful": "Reconnexion réussie.",
+      "wrong_account": "Utilisez le même compte IAM que lors de la configuration."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Mise à jour du calendrier",
+        "description": "Par défaut : toutes les 30 minutes. La session est réutilisée et renouvelée si nécessaire. Toute modification recharge l’intégration.",
+        "data": {
+          "refresh_minutes": "Intervalle de mise à jour (minutes, 15–1440)"
+        }
+      }
+    }
+  }
+}

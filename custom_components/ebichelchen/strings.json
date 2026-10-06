@@ -1,0 +1,56 @@
+{
+  "title": "eBichelchen",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to eBichelchen",
+        "description": "Use a student or parent IAM account. eduKey, LuxTrust and eID are not supported. Credentials are stored in your local Home Assistant configuration.",
+        "data": {
+          "username": "IAM username",
+          "password": "IAM password"
+        }
+      },
+      "students": {
+        "title": "Choose calendars",
+        "description": "Create a separate eBichelchen calendar for each selected student. Display these together with your existing calendars in a Calendar card. Session renewal happens automatically, independently of this refresh interval.",
+        "data": {
+          "students": "Students",
+          "refresh_minutes": "Refresh interval (minutes, 15–1440)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect eBichelchen",
+        "description": "Enter the current password for the same IAM account.",
+        "data": {
+          "password": "IAM password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "IAM rejected the login. Check your credentials.",
+      "unsupported_auth": "This login requires MFA, LuxTrust, eID, or an unsupported authentication step.",
+      "cannot_connect": "Unable to reach Education.lu. Try again later.",
+      "unsupported_role": "Use a student or parent account. Teacher and supervisor accounts are not supported.",
+      "access_denied": "This account cannot access the selected student. Check access in eBichelchen.",
+      "invalid_response": "Education.lu returned an unexpected response. The integration may need updating.",
+      "select_students": "Select at least one student."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "no_students": "No accessible students were returned for this account.",
+      "reauth_successful": "Reauthentication successful.",
+      "wrong_account": "Use the same IAM account as the original setup."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Calendar refresh",
+        "description": "Default: every 30 minutes. Sessions are reused and renewed when needed. Changes reload the integration.",
+        "data": {
+          "refresh_minutes": "Refresh interval (minutes, 15–1440)"
+        }
+      }
+    }
+  }
+}

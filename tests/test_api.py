@@ -1,0 +1,226 @@
+"""Synthetic protocol tests. No HARs, real credentials or school data in fixtures."""
+
+import json
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from custom_components.ebichelchen.api import (
+    AccessDenied,
+    EbichelchenClient,
+    InvalidAuth,
+    InvalidResponse,
+    Page,
+    UnsupportedAuth,
+    validate_url,
+    week_parameter,
+)
+from custom_components.ebichelchen.const import API_URL
+
+
+def envelope(objects, status=200):
+    return Page(
+        API_URL + "/v2/get-user",
+        status,
+        json.dumps({"code": 0, "objects": objects}),
+        "application/json",
+    )
+
+
+@pytest.fixture
+def client():
+    return EbichelchenClient(MagicMock(), "demo-user", "demo-password")
+
+
+@pytest.mark.parametrize(
+    "day,expected",
+    [(date(2026, 10, 6), "2026-10-06 +02:00"), (date(2026, 11, 2), "2026-11-02 +01:00")],
+)
+def test_dst_parameter(day, expected):
+    assert week_parameter(day) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://auth.education.lu/login",
+        "https://auth.education.lu.evil.test/",
+        "https://evil.test/",
+        "https://user:password@ssl.education.lu/",
+        "https://ssl.education.lu:444/",
+    ],
+)
+def test_auth_destination_allowlist(url):
+    with pytest.raises(UnsupportedAuth):
+        validate_url(url)
+
+
+async def test_complete_login_flow(client):
+    discovery = Page(
+        "https://auth.education.lu/module.php/saml/disco",
+        200,
+        """<form method="get" action="/module.php/saml/disco"><input name="return" value="dynamic-state"><input name="username"><button name="idp_urn:x-auth-education-lu:auth:iam"></button></form>""",
+    )
+    login = Page(
+        "https://iam.auth.education.lu/module.php/core/loginuserpass?AuthState=fresh",
+        200,
+        """<form method="post" action="?AuthState=fresh"><input name="username"><input type="password" name="password"><input type="hidden" name="csrf" value="fresh-csrf"></form>""",
+    )
+    saml1 = Page(
+        login.url,
+        200,
+        """<form method="post" action="https://auth.education.lu/module.php/saml/sp/saml2-acs.php/default"><input type="hidden" name="SAMLResponse" value="synthetic-one"></form>""",
+    )
+    saml2 = Page(
+        "https://auth.education.lu/module.php/saml/sp/saml2-acs.php/default",
+        200,
+        """<form method="post" action="https://ssl.education.lu/ebichelchen/app/saml/sso"><input type="hidden" name="SAMLResponse" value="synthetic-two"><input type="hidden" name="RelayState" value="new-state"></form>""",
+    )
+    client._request = AsyncMock(
+        side_effect=[
+            discovery,
+            Page(discovery.url, 200, '{"syntax":"OK","auth":"urn:x-auth-education-lu:auth:iam"}'),
+            login,
+            saml1,
+            saml2,
+            Page("https://ssl.education.lu/ebichelchen/app/", 200, "<html/>"),
+            envelope({"id": 123}),
+        ]
+    )
+    await client._login()
+    assert client._authenticated
+    calls = client._request.call_args_list
+    assert calls[2].kwargs["params"]["return"] == "dynamic-state"
+    assert "idp_urn:x-auth-education-lu:auth:iam" in calls[2].kwargs["params"]
+    assert calls[3].args[1].endswith("?AuthState=fresh")
+    assert calls[3].kwargs["data"] == {
+        "username": "demo-user",
+        "password": "demo-password",
+        "csrf": "fresh-csrf",
+    }
+    assert calls[5].kwargs["data"]["RelayState"] == "new-state"
+
+
+async def test_wrong_password_only_submitted_once(client):
+    login = Page(
+        "https://iam.auth.education.lu/module.php/core/loginuserpass",
+        200,
+        '<form method="post"><input name="username"><input name="password" type="password"></form>',
+    )
+    client._request = AsyncMock(side_effect=[login, login])
+    with pytest.raises(InvalidAuth):
+        await client._api("/v2/get-user")
+    with pytest.raises(InvalidAuth):
+        await client._api("/v2/get-user")
+    assert client._request.call_count == 2
+
+
+async def test_session_expiry_retries_once(client):
+    client._authenticated = True
+    client._request = AsyncMock(side_effect=[envelope(None, 401), envelope({"id": 123})])
+    client._login = AsyncMock()
+    assert await client._api("/v2/get-user") == {"id": 123}
+    assert client._login.await_count == 1
+
+
+async def test_expiry_after_renewal_stops(client):
+    client._authenticated = True
+    client._request = AsyncMock(return_value=envelope(None, 401))
+    client._login = AsyncMock()
+    with pytest.raises(InvalidAuth):
+        await client._api("/v2/get-user")
+    assert client._login.await_count == 1
+
+
+async def test_forbidden_does_not_reauthenticate(client):
+    client._authenticated = True
+    client._request = AsyncMock(return_value=envelope(None, 403))
+    client._login = AsyncMock()
+    with pytest.raises(AccessDenied):
+        await client._api("/v4/fetch-entries-for-week")
+    client._login.assert_not_called()
+
+
+async def test_student_and_parent_discovery(client):
+    client._api = AsyncMock(return_value={"id": 123, "activeRole": 0, "fullName": "Demo Student"})
+    assert await client.account() == ("123", {"123": "Demo Student"})
+    client._api = AsyncMock(
+        side_effect=[{"id": 456, "activeRole": 3}, [{"id": 123, "fullName": "Demo Student"}]]
+    )
+    assert await client.account() == ("456", {"123": "Demo Student"})
+    assert client._api.call_args.args[0] == "/v2/fetch-students-for-parent"
+    assert client._api.call_args.kwargs["method"] == "POST"
+
+
+async def test_week_cache_and_deduplication(client):
+    client._api = AsyncMock(return_value=[{"id": 1, "startDate": "2026-10-06T00:00:00"}])
+    first = await client.entries("123", date(2026, 10, 5), date(2026, 10, 19))
+    assert len(first) == 1
+    assert client._api.call_count == 2
+    assert await client.entries("123", date(2026, 10, 5), date(2026, 10, 19)) == first
+    assert client._api.call_count == 2
+    client.cache_seconds = 0
+    await client.entries("123", date(2026, 10, 5), date(2026, 10, 12))
+    assert client._api.call_count == 3
+
+
+@pytest.mark.parametrize("payload", ["not-json", '{"code":1,"objects":[]}', '{"code":0}', "[]"])
+def test_api_errors_never_look_like_empty_calendars(payload):
+    with pytest.raises(InvalidResponse):
+        EbichelchenClient._decode(Page(API_URL, 200, payload, "application/json"))
+
+
+class FakeContent:
+    async def iter_chunked(self, size):
+        yield b'{"code":0,'
+        yield b'"objects":[]}'
+
+
+class FakeResponse:
+    content = FakeContent()
+    status = 302
+    url = "https://iam.auth.education.lu/module.php/core/loginuserpass"
+    headers = {"Location": "https://evil.test/capture"}
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+
+async def test_redirect_is_checked_before_request(client):
+    client.session.request.return_value = FakeResponse()
+    with pytest.raises(UnsupportedAuth):
+        await client._request("GET", FakeResponse.url)
+    assert client.session.request.call_count == 1
+
+
+async def test_credentials_cannot_be_replayed_to_other_trusted_host(client):
+    response = FakeResponse()
+    response.status = 307
+    response.headers = {"Location": "https://auth.education.lu/capture"}
+    client.session.request.return_value = response
+    with pytest.raises(UnsupportedAuth):
+        await client._request("POST", response.url, data={"password": "demo"}, credentials=True)
+    assert client.session.request.call_count == 1
+
+
+async def test_mfa_discovery_rejected_before_password(client):
+    page = Page(
+        "https://auth.education.lu/module.php/saml/disco",
+        200,
+        '<form><input name="username"></form>',
+    )
+    client._request = AsyncMock(
+        side_effect=[
+            page,
+            Page(page.url, 200, '{"syntax":"OK","auth":"urn:x-auth-education-lu:auth:iam:2fa"}'),
+        ]
+    )
+    with pytest.raises(UnsupportedAuth):
+        await client._login()
+    assert all(
+        "password" not in call.kwargs.get("data", {}) for call in client._request.call_args_list
+    )

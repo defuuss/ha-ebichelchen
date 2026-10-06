@@ -1,0 +1,16 @@
+{
+  "domain": "ebichelchen",
+  "name": "eBichelchen",
+  "codeowners": [
+    "@defuuss"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/defuuss/ha-ebichelchen",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/defuuss/ha-ebichelchen/issues",
+  "requirements": [
+    "beautifulsoup4==4.14.3"
+  ],
+  "version": "0.1.0"
+}
