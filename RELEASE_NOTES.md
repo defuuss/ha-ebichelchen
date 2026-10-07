@@ -1,10 +1,9 @@
-## eBichelchen v0.1.4
+## eBichelchen v0.1.5
 
-- Fix the IAM discovery HTTP 404 by sending the same AJAX headers as the Education.lu login page (`X-Requested-With`, JSON `Accept`, and the discovery-page `Referer`).
-- Reject unsuccessful discovery HTTP responses before parsing or submitting credentials.
-- Keep request-specific headers out of subsequent redirects.
-- Add regression tests for the AJAX request, redirect header handling, and unsuccessful discovery responses.
+- Fix HTTP 500 during the SAML redirect before the IAM password form. Preserve the original URL encoding so the HTTP client does not alter the signed query string.
+- Keep normal query encoding for newly constructed API and discovery requests.
+- Show the HTTP status and a fixed step label in connection errors, including the setup form. No credentials, signed URLs, cookies or response bodies are logged.
 
-Validation: 44 synthetic tests against Home Assistant 2025.4.4 and Python 3.13, lint/format checks, and offline replay of the supplied browser login capture. A live discovery request using a dummy username reproduced HTTP 404 without AJAX headers and HTTP 200 with them. Full live account authentication remains to be verified on the user's installation.
+Validation: 49 synthetic tests pass with Home Assistant 2025.4.4 and Python 3.13, plus lint/format checks and offline login replay. A live public IAM selection check with a dummy username reproduced the failure with normal URL encoding and reached the password form (HTTP 200) when the signed URL was preserved. No password was submitted; full account login remains to be verified on the user's installation.
 
-In HACS, refresh repository information, select **v0.1.4** under **Redownload**, and restart Home Assistant before retrying setup. The standard Home Assistant warning about an untested custom integration is expected.
+Update to **v0.1.5** through HACS, restart Home Assistant, and retry eBichelchen setup.

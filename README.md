@@ -2,7 +2,7 @@
 
 Unofficial, read-only Home Assistant custom integration for Luxembourg's eBichelchen. Designed for installation through HACS as a **custom repository**.
 
-**Initial version: not yet tested against a live IAM login or inside a running Home Assistant installation.** The protocol was reconstructed from a browser capture dated 6 October 2026. 44 automated tests pass against Home Assistant 2025.4.4 and Python 3.13. Tests use synthetic data; newer Home Assistant versions have not yet been run in this test environment. Education.lu does not publish a compatibility contract for these private endpoints; a login-page or API change can require an integration update.
+**Initial version: not yet tested against a live IAM login or inside a running Home Assistant installation.** The protocol was reconstructed from a browser capture dated 6 October 2026. 49 automated tests pass against Home Assistant 2025.4.4 and Python 3.13. Tests use synthetic data; newer Home Assistant versions have not yet been run in this test environment. Education.lu does not publish a compatibility contract for these private endpoints; a login-page or API change can require an integration update.
 
 ## What it does
 
@@ -111,7 +111,7 @@ GNU General Public License v3.0; see [LICENSE](LICENSE).
 
 ## Troubleshooting downloads and setup
 
-If HACS requests an archive under `refs/heads/<short-commit>.zip` and receives 404, refresh the repository information and use **Redownload** to select a named release, such as **v0.1.4**. If no release is listed yet, select **main**. Restart Home Assistant after a successful download. A failed download can leave an older integration installed.
+If HACS requests an archive under `refs/heads/<short-commit>.zip` and receives 404, refresh the repository information and use **Redownload** to select a named release, such as **v0.1.5**. If no release is listed yet, select **main**. Restart Home Assistant after a successful download. A failed download can leave an older integration installed.
 
 The Home Assistant warning that a custom integration has not been tested by Home Assistant is expected; it does not itself mean installation or authentication failed.
 
@@ -120,3 +120,5 @@ Version 0.1.3 and later display the integration's safe error reason in setup and
 GitHub Actions publishes a named release after the tests and hassfest pass on `main`, when the manifest version has not been released before. New stable releases are explicitly marked **Latest** on GitHub; existing releases are left unchanged. The [latest release link](https://github.com/defuuss/ha-ebichelchen/releases/latest) always points to the current stable release. HACS exposes an update entity for the installed integration and checks for available updates. Unattended installation requires a Home Assistant automation using `update.install` for that entity; a Home Assistant restart is required to load updated integration code. See the [HACS update entity documentation](https://www.hacs.dev/docs/use/entities/update/).
 
 Version 0.1.4 fixes `IAM discovery did not return JSON (HTTP 404)` by sending the AJAX headers used by the Education.lu login page. A live request with a dummy username reproduced HTTP 404 without those headers and HTTP 200 with them. Full account login still needs verification on your installation.
+
+Version 0.1.5 preserves the exact encoding of signed SAML redirect URLs. Normalizing their query strings invalidated the signature and caused HTTP 500 before the IAM password form. A live check using a dummy username reached the password form with the fix; no password was submitted. Server errors now include a fixed step label and HTTP status, without URL parameters or response bodies.

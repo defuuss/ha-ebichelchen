@@ -29,7 +29,7 @@
     "error": {
       "invalid_auth": "IAM rejected the login. Check your credentials.",
       "unsupported_auth": "This login requires MFA, LuxTrust, eID, or an unsupported authentication step.",
-      "cannot_connect": "Unable to reach Education.lu. Try again later.",
+      "cannot_connect": "Unable to reach Education.lu. Try again later. {error_detail}",
       "unsupported_role": "Use a student or parent account. Teacher and supervisor accounts are not supported.",
       "access_denied": "This account cannot access the selected student. Check access in eBichelchen.",
       "invalid_response": "Education.lu returned an unexpected response. The integration may need updating. {error_detail}",

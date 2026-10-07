@@ -5,9 +5,11 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from yarl import URL
 
 from custom_components.ebichelchen.api import (
     AccessDenied,
+    CannotConnect,
     EbichelchenClient,
     InvalidAuth,
     InvalidResponse,
@@ -200,6 +202,55 @@ async def test_redirect_is_checked_before_request(client):
     client.session.request.return_value = FakeResponse()
     with pytest.raises(UnsupportedAuth):
         await client._request("GET", FakeResponse.url)
+    assert client.session.request.call_count == 1
+
+
+async def test_signed_redirect_query_is_preserved(client):
+    signed_url = (
+        "https://iam.auth.education.lu/module.php/saml/idp/singleSignOnService"
+        "?SAMLRequest=demo%2Fvalue%2B%3D&SigAlg=https%3A%2F%2Fexample.test%2Fsig"
+        "&Signature=demo%2Fsignature%2B%3D"
+    )
+    redirect = FakeResponse()
+    redirect.headers = {"Location": signed_url}
+    destination = FakeResponse()
+    destination.url = signed_url
+    destination.status = 200
+    destination.headers = {}
+    client.session.request.side_effect = [redirect, destination]
+    await client._request("GET", redirect.url)
+    sent_url = client.session.request.call_args_list[1].args[1]
+    assert isinstance(sent_url, URL)
+    assert str(sent_url) == signed_url
+    assert sent_url.raw_query_string == signed_url.split("?", 1)[1]
+    assert str(URL(signed_url)) != signed_url
+
+
+async def test_new_query_parameters_still_use_normal_encoding(client):
+    response = FakeResponse()
+    response.status = 200
+    response.headers = {}
+    client.session.request.return_value = response
+    params = {"dateLocatedInWeek": "2026-10-07 +02:00"}
+    await client._request("GET", API_URL + "/v4/fetch-entries-for-week", params=params)
+    call = client.session.request.call_args
+    assert isinstance(call.args[1], str)
+    assert call.kwargs["params"] == params
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+async def test_server_error_reports_safe_step_and_status(client, status):
+    response = FakeResponse()
+    response.url = (
+        "https://iam.auth.education.lu/module.php/saml/idp/singleSignOnService"
+        "?SAMLRequest=private-state"
+    )
+    response.status = status
+    response.headers = {}
+    client.session.request.return_value = response
+    with pytest.raises(CannotConnect) as error:
+        await client._request("GET", response.url)
+    assert str(error.value) == f"Education.lu returned HTTP {status} at saml_sign_on"
     assert client.session.request.call_count == 1
 
 

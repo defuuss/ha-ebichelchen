@@ -12,6 +12,7 @@ from urllib.parse import urljoin, urlsplit
 
 import aiohttp
 from bs4 import BeautifulSoup
+from yarl import URL
 
 from .const import ALLOWED_HOSTS, API_URL, SCHOOL_TZ
 
@@ -25,6 +26,8 @@ def endpoint_label(url: str) -> str:
         "/module.php/IAM/idpSelection.php": "iam_discovery",
         "/module.php/core/loginuserpass": "iam_password",
         "/module.php/saml/disco": "iam_selection",
+        "/module.php/saml/sp/discoResponse": "iam_selection_handoff",
+        "/module.php/saml/idp/singleSignOnService": "saml_sign_on",
         "/module.php/saml/sp/saml2-acs.php/default": "saml_identity_handoff",
         "/ebichelchen/app/saml/sso": "saml_application_handoff",
         "/ebichelchen/app/api/v2/get-user": "user_profile",
@@ -144,7 +147,15 @@ class EbichelchenClient:
                 ):
                     raise UnsupportedAuth("Unexpected credential destination")
                 async with self.session.request(
-                    method, url, data=data, params=params, headers=headers, allow_redirects=False
+                    method,
+                    # SAML Redirect signatures cover the original URL-encoded
+                    # query. Requoting it invalidates the signature. Requests
+                    # with new query parameters still use normal encoding.
+                    URL(url, encoded=True) if params is None else url,
+                    data=data,
+                    params=params,
+                    headers=headers,
+                    allow_redirects=False,
                 ) as response:
                     chunks = []
                     size = 0
@@ -180,7 +191,9 @@ class EbichelchenClient:
                         method, data, credentials = "GET", None, False
                     continue
                 if page.status == 429 or page.status >= 500:
-                    raise CannotConnect("Education.lu is temporarily unavailable")
+                    raise CannotConnect(
+                        f"Education.lu returned HTTP {page.status} at {endpoint_label(page.url)}"
+                    )
                 return page
             raise InvalidResponse("Too many redirects")
         except (aiohttp.ClientError, TimeoutError, UnicodeError):

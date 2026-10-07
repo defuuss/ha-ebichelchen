@@ -29,7 +29,7 @@
     "error": {
       "invalid_auth": "Connexion IAM refusée. Vérifiez vos identifiants.",
       "unsupported_auth": "Cette connexion nécessite une étape interactive non prise en charge (MFA, LuxTrust ou eID).",
-      "cannot_connect": "Connexion à Education.lu impossible. Réessayez plus tard.",
+      "cannot_connect": "Connexion à Education.lu impossible. Réessayez plus tard. {error_detail}",
       "unsupported_role": "Utilisez un compte élève ou parent. Les comptes enseignant et encadrant ne sont pas pris en charge.",
       "access_denied": "Ce compte ne peut pas accéder à cet élève. Vérifiez les droits dans eBichelchen.",
       "invalid_response": "Réponse inattendue de Education.lu. Une mise à jour peut être nécessaire. {error_detail}",
